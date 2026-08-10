@@ -1,0 +1,39 @@
+# Worktrees
+.worktrees/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated reports
+*.html
+!src/claude_prospector/templates/*.html
+
+# Claude Code
+.claude/
+
+# Test & lint caches
+.pytest_cache/
+.ruff_cache/
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml

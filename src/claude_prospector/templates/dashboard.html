@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code Usage — Economy</title>
+
+{# Vendored Chart.js 4 and chartjs-chart-treemap, inlined for offline use #}
+<script>{{ chart_js | safe }}</script>
+<script>{{ treemap_js | safe }}</script>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #0d1117; }
+  body {
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont,
+      'Segoe UI', Roboto, sans-serif;
+    color: #c9d1d9;
+    font-size: 13px;
+    line-height: 1.4;
+    min-height: 100vh;
+  }
+  ::selection { background: rgba(210,168,255,0.35); color: #f0f6fc; }
+
+  .stage { max-width: 1600px; margin: 0 auto; padding: 24px; }
+
+  /* Shell — page title + view toggle */
+  .shell-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; margin-bottom: 22px; flex-wrap: wrap;
+    padding-bottom: 18px; border-bottom: 1px solid #21262d;
+  }
+  .shell-head .titles h1 {
+    font-size: 24px; color: #f0f6fc; font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .shell-head .titles .sub {
+    font-size: 13px; color: #8b949e; margin-top: 4px;
+  }
+  .shell-head .titles .sub b { color: #d2a8ff; font-weight: 500; }
+
+  /* Segmented view toggle */
+  .view-toggle {
+    display: inline-flex;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 4px;
+    gap: 2px;
+  }
+  .view-toggle button {
+    background: transparent;
+    border: 0;
+    color: #8b949e;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 18px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .view-toggle button:hover { color: #c9d1d9; }
+  .view-toggle button.active {
+    background: #21262d;
+    color: #f0f6fc;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset,
+      0 1px 2px rgba(0,0,0,0.3);
+  }
+  .view-toggle button .badge {
+    font-size: 10px;
+    background: rgba(210,168,255,0.15);
+    color: #d2a8ff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .view-toggle button.active.advanced .badge {
+    background: rgba(210,168,255,0.22);
+  }
+
+  /* Shared primitives */
+  .badge-model {
+    display: inline-block; padding: 1px 7px; border-radius: 10px;
+    font-size: 10px; font-weight: 500; letter-spacing: 0.02em;
+  }
+  .badge-opus   { background: #3b1f6e; color: #d2a8ff; }
+  .badge-sonnet { background: #1a3a2a; color: #7ee787; }
+  .badge-haiku  { background: #1a2a3a; color: #79c0ff; }
+  .badge-unknown{ background: #21262d; color: #8b949e; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #21262d; color: #c9d1d9;
+    padding: 2px 8px; border-radius: 12px; font-size: 11px;
+  }
+
+  /* Period tabs (used inside tab views) */
+  .period-tabs {
+    display: inline-flex;
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .period-tabs button {
+    background: transparent;
+    border: 0;
+    color: #8b949e;
+    padding: 5px 12px;
+    border-radius: 5px;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .period-tabs button:hover { color: #f0f6fc; }
+  .period-tabs button.active { background: #21262d; color: #f0f6fc; }
+
+  /* View container — fades on switch */
+  #view-container { animation: fadein 0.25s ease; }
+  @keyframes fadein {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* Utility classes */
+  .muted { color: #8b949e; }
+  .dim   { color: #6e7681; }
+  .hi    { color: #f0f6fc; }
+  .num   { font-variant-numeric: tabular-nums; }
+
+  /* ── Overview (Phase 2 placeholder layout) ────────────────────────── */
+  .ov-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .ov-kpi {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .ov-kpi .label {
+    font-size: 11px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+  }
+  .ov-kpi .value {
+    font-size: 28px;
+    color: #f0f6fc;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Two-column layout for model/project breakdown — collapses at 1000px */
+  .row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  @media (max-width: 1000px) {
+    .row { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 12px;
+    padding: 18px 20px;
+    overflow: hidden;
+  }
+  .card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 14px;
+  }
+  .card-head h2 { font-size: 14px; color: #f0f6fc; font-weight: 600; }
+  .card-head .sub { font-size: 11px; color: #8b949e; }
+
+  /* Session table */
+  .session-table { width: 100%; overflow-x: auto; overflow-y: auto; }
+  .session-row {
+    display: grid;
+    grid-template-columns: 1fr 120px 80px 60px;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid #21262d;
+    align-items: center;
+    font-size: 12px;
+  }
+  @media (max-width: 800px) {
+    .session-row { grid-template-columns: 1fr 80px; }
+    .session-row .sess-agent,
+    .session-row .sess-model { display: none; }
+  }
+  .session-row:last-child { border-bottom: none; }
+  .session-row .sess-project { color: #ffa657; font-weight: 500; }
+  .session-row .sess-tokens {
+    color: #f0f6fc; font-weight: 600; font-size: 14px;
+    font-variant-numeric: tabular-nums; text-align: right;
+  }
+  .session-row .sess-agent { color: #8b949e; }
+  .session-row .sess-model { color: #6e7681; text-align: right; }
+
+  /* Phase 3 placeholder card */
+  .ph3-card {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 12px;
+    padding: 60px 20px;
+    text-align: center;
+    color: #6e7681;
+  }
+  .ph3-card .ph3-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #8b949e;
+    margin-bottom: 8px;
+  }
+  .ph3-card .ph3-badge {
+    display: inline-block;
+    background: rgba(210,168,255,0.12);
+    color: #d2a8ff;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    margin-bottom: 14px;
+  }
+  .ph3-card p { font-size: 12px; color: #6e7681; max-width: 420px; margin: 0 auto; }
+
+  /* Budget bars hero */
+  .budgets {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  @media (max-width: 1000px) {
+    .budgets { grid-template-columns: 1fr; }
+  }
+  .bcard {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 12px;
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .bcard::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--accent, #58a6ff);
+  }
+  .bcard .bname {
+    font-size: 11px; color: #8b949e;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    font-weight: 500; margin-bottom: 4px;
+  }
+  .bcard .bval {
+    font-size: 26px; color: #f0f6fc; font-weight: 600;
+    letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+  }
+</style>
+</head>
+<body>
+
+{# Data injected by Jinja from claude_prospector.renderer #}
+<script>
+  window.DATA = {{ data_json | safe }};
+  {# limits_json renders the literal "null" when limits is None; coerce to {} #}
+  const _limits_raw = {{ limits_json | safe }};
+  window.LIMITS = _limits_raw || {};
+  window.GENERATED_AT = "{{ generated_at }}";
+</script>
+
+{# Shared utilities, palette, chart defaults (window.CP) #}
+<script>{{ cp_utils_js | safe }}</script>
+
+{# Phase 3 view renderers (inlined for offline use) #}
+<script>{{ economics_basic_js | safe }}</script>
+<script>{{ layout_b_diag_js | safe }}</script>
+<script>{{ economics_js | safe }}</script>
+
+<div class="stage">
+  <div class="shell-head">
+    <div class="titles">
+      <h1>Economy</h1>
+      <div class="sub" id="shell-sub">
+        A weekly snapshot of how much you're using Claude Code.
+      </div>
+    </div>
+    <div class="view-toggle" role="tablist" aria-label="View mode">
+      <button data-view="basic" class="active" role="tab" aria-selected="true">
+        Overview
+      </button>
+      <button data-view="detail" role="tab" aria-selected="false">
+        Breakdown
+      </button>
+      <button data-view="advanced" class="advanced" role="tab"
+        aria-selected="false">
+        Advanced <span class="badge">Power user</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="view-container"></div>
+</div>
+
+<script>
+  CP.applyChartDefaults();
+
+  const _container = document.getElementById('view-container');
+  const _sub = document.getElementById('shell-sub');
+  const _buttons = document.querySelectorAll('.view-toggle button');
+
+  const _VIEW_SUBS = {
+    basic:
+      "A weekly snapshot of how much you're using Claude Code.",
+    detail:
+      "Where your tokens go — projects, agents, skills and adoption, full session log.",
+    advanced:
+      "Per-turn cost lever metrics with workflow vs. cost decomposition. " +
+      "<b>For users comfortable with token/cache economics.</b>",
+  };
+
+  function _renderView(view) {
+    // Reset animation for re-trigger
+    _container.style.animation = 'none';
+    _container.offsetHeight; // force reflow
+    _container.style.animation = '';
+
+    _container.className = '';
+    _container.innerHTML = '';
+
+    if (view === 'basic') {
+      renderEconomicsBasic(_container);
+    } else if (view === 'detail') {
+      renderLayoutBDiag(_container);
+    } else {
+      renderEconomics(_container);
+    }
+    _sub.innerHTML = _VIEW_SUBS[view] || '';
+  }
+
+  function setView(view) {
+    _buttons.forEach(function(b) {
+      const active = b.dataset.view === view;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    _renderView(view);
+  }
+
+  _buttons.forEach(function(b) {
+    b.addEventListener('click', function() { setView(b.dataset.view); });
+  });
+
+  // Allow the overview "Switch to Advanced" CTA to drive the shell
+  window.addEventListener('economy:switch-view', function(e) {
+    setView(e.detail.view);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  setView('basic');
+</script>
+
+</body>
+</html>
